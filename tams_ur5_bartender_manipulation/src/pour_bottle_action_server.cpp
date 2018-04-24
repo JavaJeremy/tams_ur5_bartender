@@ -107,6 +107,7 @@ public:
     }
 
     void showTrajectory(std::vector<geometry_msgs::Pose> trajectory) {
+        ROS_INFO_STREAM("Displaying trajectory");
         std::vector<geometry_msgs::Point> path;
         for (geometry_msgs::Pose& poseOfTrajectory : trajectory) {
             geometry_msgs::Point point = poseOfTrajectory.position;
@@ -131,7 +132,7 @@ public:
     handFrame_(endEffectorFrame), glassFrame_(glassFrame), tableFrame_(tableFrame), maxAcceleration_(3.0), pnh_("~"), nh_("pouring"), gripper_("gripper"), arm_("arm") {
         pose_stamped_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("pose_stamped", 1, true);
         tfBroadcaster_ = new tf::TransformBroadcaster;
-        bagPath_ =  "/informatik2/students/home/2hartz/NetbeansProjects/Pouring_Thesis/ros_ws/src/tams_pour/bags/trajectories.bag";
+        bagPath_ = "/informatik2/students/home/2hartz/NetbeansProjects/Pouring_Thesis/ros_ws/src/tams_pour/bags/trajectories.bag";
         //pnh_.getParam("bagPath", bagPath_);
 
         //initialize moveit group to move
@@ -159,6 +160,7 @@ public:
     }
 
     void rotatePouringTrajectories() {
+        ROS_INFO_STREAM("Rotating original trajectory");
         for (std::vector<geometry_msgs::Pose> &waypoints : trajectories_) {
             rotateTrajectory(waypoints);
             transformedTrajectories_.push_back(transformBottlePoseToHand(waypoints));
@@ -241,7 +243,7 @@ public:
         ros::Duration robotTime = trajectory.joint_trajectory.points[trajectory.joint_trajectory.points.size() - 1].time_from_start;
         printTrajectoryInformation(success_percentage, duration, waypointsGiven, waypointsComputed, humanTime, robotTime);
 
-        return (success_percentage >= 0.9);
+        return (success_percentage >= 0.5);
     }
 
     void printTrajectoryInformation(double success_percentage, double duration, int waypointsGiven, int waypointsComputed, ros::Duration humanTime, ros::Duration robotTime) {
@@ -328,7 +330,7 @@ public:
     bool playTrajectory(int trajectoryNo) {
         if (trajectoryNo >= computedRobotTrajectories_.size()) {
             ROS_ERROR_STREAM("No computed robot trajectory with index " << trajectoryNo << " found!");
-            return -1;
+            return false;
         } else {
             ROS_INFO_STREAM("Playing Trajectory " << trajectoryNo);
             //Move to first point of trajectory
@@ -347,7 +349,7 @@ public:
                 }
             }
 
-            return 1;
+            return true;
         }
     }
 
@@ -726,15 +728,6 @@ public:
         return getAttachedCollisionObjectMsg(object_id, handFrame_, mesh, mesh_pose, primitive, primitive_pose);
     }
 
-    void addGlass() {
-        //Add glass
-
-        moveit::planning_interface::PlanningSceneInterface psi;
-        std::string meshPath = "package://tams_pour/meshes/ikea_glass_binary.stl";
-        moveit_msgs::CollisionObject object = getMeshObject("glass", 0.0, 0.15, meshPath, 0.1, 0.0);
-        psi.applyCollisionObject(object, getBlue());
-    }
-
     void addBottle() {
         //Add glass
 
@@ -784,6 +777,7 @@ class GrabPourPlace {
 
     moveit::planning_interface::MoveGroupInterface arm;
     moveit::planning_interface::MoveGroupInterface gripper;
+    tf::TransformBroadcaster* tfBroadcaster_;
 
 protected:
     ros::NodeHandle node_handle;
@@ -1102,7 +1096,6 @@ public:
     }
 
     std::vector<geometry_msgs::Pose> compute_pouring_waypoints(std::string axis, bool inverse_direction, moveit_msgs::CollisionObject bottle, geometry_msgs::Pose start_pose) {
-        //arm.setPoseReferenceFrame("world");
         geometry_msgs::Pose target_pose = start_pose;
         std::vector<geometry_msgs::Pose> waypoints;
         waypoints.push_back(start_pose); // first point of trajectory - necessary?
@@ -1292,16 +1285,30 @@ public:
     }
 
     void execute(const tams_ur5_bartender_manipulation::PourBottleGoalConstPtr& goal) {
+        tfBroadcaster_ = new tf::TransformBroadcaster;
         ROS_INFO("Running pour bottle!");
 
         cleanup();
         glass_ = spawnObject("glass");
+
+        tf::Transform glassTf;
+        geometry_msgs::Pose gPose = glass_.primitive_poses[0];
+        gPose.orientation.x = 0.0;
+        gPose.orientation.y = 0.0;
+        gPose.orientation.z = 0.0;
+        gPose.orientation.w = 1.0;
+        tf::poseMsgToTF(gPose, glassTf);
+        ros::Time now = ros::Time::now();
+        tf::StampedTransform glassTfStamped(glassTf, now, "table_top", "glass");
+        tfBroadcaster_->sendTransform(glassTfStamped);
+        ROS_ERROR_STREAM("Glass transform published!");
+
         recognizeBottles();
         ros::Duration(1.0).sleep();
         //moving arm to default position after collision objects are spawned
         move_back();
 
-        cleanup();
+        //cleanup();
 
         std::string bottle_id = goal->bottle_id;
         float portion_size = goal->portion_size;
@@ -1323,10 +1330,11 @@ public:
             //Spawn bottle
             bottle = spawnObject("bottle");
         }
+
         ROS_INFO_STREAM("Bottles Recognized");
         geometry_msgs::Pose bottle_pose = bottle.primitive_poses[0];
         bottle_pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, 0, -M_PI / 2);
-        glass_ = spawnObject("glass");
+        //glass_ = spawnObject("glass");
 
         tams_ur5_bartender_manipulation::PourBottleResult result;
         result.success = pouringStateMachine(bottle, portion_size);
@@ -1349,7 +1357,7 @@ public:
 
         moveit::planning_interface::MoveGroupInterface::Plan move_bottle_back;
         moveit::planning_interface::MoveGroupInterface::Plan move_bottle;
-
+        ROS_INFO_STREAM("TEST 1");
         do {
             switch (state) {
 
@@ -1376,11 +1384,11 @@ public:
                     //NEW POURING!
                 case pourIntoGlassNew:
                 {
+                    ROS_INFO_STREAM("Test 2");
                     TrajectoryPourer pourer("glass", "table_top", "s_model_tool0");
                     Visualisator visuals(pourer.getGlassFrame());
 
                     pourer.generatePouringTrajectories();
-
                     visuals.showTrajectory(pourer.getTrajectory(0));
                     ros::Duration(2.0).sleep();
 
@@ -1388,6 +1396,7 @@ public:
 
                     visuals.showTrajectory(pourer.getTrajectory(0));
                     ros::Duration(1.0).sleep();
+                    pourer.computeCartesianPaths();
 
                     if (pourer.playTrajectory(0)) {
                         state = moveBottleBack;
