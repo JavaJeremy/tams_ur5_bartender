@@ -4,12 +4,12 @@ All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
-    * Redistributions of source code must retain the above copyright
+ * Redistributions of source code must retain the above copyright
       notice, this list of conditions and the following disclaimer.
-    * Redistributions in binary form must reproduce the above copyright
+ * Redistributions in binary form must reproduce the above copyright
       notice, this list of conditions and the following disclaimer in the
       documentation and/or other materials provided with the distribution.
-    * Neither the name of the <organization> nor the
+ * Neither the name of the <organization> nor the
       names of its contributors may be used to endorse or promote products
       derived from this software without specific prior written permission.
 
@@ -23,7 +23,7 @@ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
 ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
+ */
 #include <ros/ros.h>
 #include <moveit_msgs/CollisionObject.h>
 #include <object_recognition_msgs/ObjectType.h>
@@ -116,15 +116,17 @@ public:
         }
     }
 
-    //Publish Feedback (to GUI)
-
+    /**
+     * Publish Feedback (to GUI)
+     */
     void publishFeedback(std::string msg) {
         feedback_.task_state = msg;
         as_->publishFeedback(feedback_);
     }
 
-    //Save bottles to internal Bottle DB
-
+    /**
+     * Save bottles to internal Bottle DB
+     */
     void objectsCallback(const tams_ur5_bartender_msgs::BarCollisionObjectArrayConstPtr & msg) {
         //delete old db
         bottles_.clear();
@@ -140,8 +142,9 @@ public:
         }
     }
 
-    // mixing action
-
+    /**
+     * mixing action
+     */
     void mix(const tams_ur5_bartender_coordination::CocktailGoalConstPtr& goal) {
         Cocktail ordered_cocktail;
         bool success = false;
@@ -157,10 +160,25 @@ public:
             }
         }
 
-        //abort if cocktail not available
+        //if no cocktail was chosen, check if valid bottle was chosen
         if (ordered_cocktail.getName() == "") {
             ROS_ERROR_STREAM("Cocktail '" << goal->cocktail << "' not found");
             publishFeedback("Cocktail '" + goal->cocktail + "' not found");
+            for (int i = 0; i < bottles_.size(); i++) {
+                if (bottles_[i] == goal->cocktail) {
+                    double amount = goal->amount ? goal->amount : 5.0;
+                    std::map<std::string, double> bottleAndAmount = {
+                        {goal->cocktail, amount}
+                    };
+                    ordered_cocktail = Cocktail(999, goal->cocktail, bottleAndAmount);
+                }
+            }
+        }
+
+        //abort if neither cocktail nor bottle available
+        if (ordered_cocktail.getName() == "") {
+            ROS_ERROR_STREAM("Bottle '" << goal->cocktail << "' not found");
+            publishFeedback("Bottle '" + goal->cocktail + "' not found");
             as_->setAborted();
             return;
         }
@@ -179,19 +197,19 @@ public:
         max_ingr_ = ingr.size();
         //iterate over ingredients of cocktail
         for (it = ingr.begin(); (it != ingr.end()) && success_; it++) {
-            tams_ur5_bartender_manipulation::PourBottleGoal goal;
+            tams_ur5_bartender_manipulation::PourBottleGoal pourBottleGoal;
             current_ingr_ = std::distance(ingr.begin(), ingr.find(it->first)) + 1;
 
             std::stringstream ss;
             ss << it->first;
             std::string name = ss.str();
-            goal.bottle_id = name;
-            goal.portion_size = double(it->second);
+            pourBottleGoal.bottle_id = name;
+            pourBottleGoal.portion_size = double(it->second);
 
-            ROS_INFO_STREAM("Mixing " << goal.portion_size << " cl " << goal.bottle_id);
+            ROS_INFO_STREAM("Mixing " << pourBottleGoal.portion_size << " cl " << pourBottleGoal.bottle_id);
 
             //send mixing goal of actual ingredient
-            ac.sendGoal(goal,
+            ac.sendGoal(pourBottleGoal,
                     boost::bind(&BartenderCoordination::doneCB, this, _1, _2),
                     boost::bind(&BartenderCoordination::actCB, this),
                     boost::bind(&BartenderCoordination::feedCB, this, _1));

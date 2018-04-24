@@ -1,5 +1,6 @@
 #goal definition
 string cocktail
+float64 amount
 ---
 #result definition
 bool success

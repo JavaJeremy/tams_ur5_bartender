@@ -23,15 +23,23 @@ var disabledClass = "unclickable";
 //Initial connection try
 connectToRos();
 playAudio("#bar-music", 0.9);
+
 // Event listeners
 $("#mixButton").click(function (e) {
     submitDrink();
     $(this).prop('disabled', true);
 });
+
+$("#pourButton").click(function (e) {
+    pourBottle();
+    $(this).prop('disabled', true);
+});
+
 $("#reconnect").click(function (e) {
     $(this).prop('disabled', true);
     connectToRos();
 });
+
 $("#musicButton").click(function (e) {
     var musicIconElement = $('#musicOnOff');
     var offIcon = "glyphicon-volume-off";
@@ -48,13 +56,7 @@ $("#musicButton").click(function (e) {
         musicIconElement.addClass(onIcon);
     }
 });
-//Recognized Bottles Dropdown
-$("#dropdownMenuButton").parent().on('show.bs.dropdown', function () {
-    $("#dropdownMenuButton").addClass("active");
-});
-$("#dropdownMenuButton").parent().on('hide.bs.dropdown', function () {
-    $("#dropdownMenuButton").removeClass("active");
-});
+
 function connectToRos() {
     loadingAnimation(true);
     ros = new ROSLIB.Ros({
@@ -114,57 +116,73 @@ function submitDrink() {
     var drinkName = selectedRadioButton.val();
     //Check if a drink was chosen and is available
     if (available && drinkName) {
-        loadingAnimation(true);
-        playAudio("#robot-music", 0.9);
-        //during pouring there's no need to listen to available cocktails anymore
-        availableCocktailslistener.unsubscribe();
-        var goal = new ROSLIB.Goal({
-            actionClient: cocktailClient,
-            goalMessage: {
-                cocktail: drinkName
-            }
-        });
-        goal.on('feedback', function (feedback) {
-            loadingAnimation(false);
-            var msg = feedback.task_state;
-            var msgStatus;
-            if (new RegExp(["Failed", "FAILED"].join("|")).test(msg)) {
-                msgStatus = 1;
-            } else if (new RegExp(["Picking up bottle succeeded","Moving bottle to glass succeeded"].join("|")).test(msg)){
-                msgStatus = 2;
-            } else if (new RegExp(["Finished", "succeeded"].join("|")).test(msg)) {
-                msgStatus = 0;
-            } else {
-                msgStatus = 2;
-            }
-            console.log(msg);
-            displayMsg(msg, false, msgStatus);
-            //If still process still ongoing show loading bar after a while
-            if (msgStatus >= 2) {
-                animationTimeout = setTimeout(function () {
-                    loadingAnimation(true);
-                }, 2500);
-                playRandomNoRepeatSound(feedbackChooser);
-            } else {
-                var success = msgStatus === 0;
-                var chooser = (success) ? successChooser : failChooser;
-                playRandomNoRepeatSound(chooser);
-            }
-        });
-        goal.on('result', function (result) {
-            playAudio("#bar-music", 1);
-            $("#mixButton").prop('disabled', false);
-            loadingAnimation(false);
-            listenToAvailableCocktails();
-            var msg = 'Final Result: ' + result.success;
-            console.log(msg);
-        });
-        goal.send();
+        callMixAction(drinkName, "#mixButton");
     } else {
         var msg = "Please choose an available cocktail first!";
         displayMsg(msg);
         $("#mixButton").prop('disabled', false);
     }
+}
+
+function pourBottle() {
+    var selectedRadioButton = $("input:radio[name='bottle']:checked");
+    var bottleName = selectedRadioButton.val();
+    var amountMl = $("#pourAmount").val();
+    var amountCl = parseInt(amountMl) / 10;
+    alert("Amount to pour: " + amountMl + " ml, " + amountCl +" cl");
+    if (bottleName) {
+        callMixAction(bottleName, "#pourButton", amountCl);
+    }
+}
+
+function callMixAction(mixName, buttonName, amount) {
+    loadingAnimation(true);
+    playAudio("#robot-music", 0.9);
+    //during pouring there's no need to listen to available cocktails anymore
+    availableCocktailslistener.unsubscribe();
+    var goal = new ROSLIB.Goal({
+        actionClient: cocktailClient,
+        goalMessage: {
+            cocktail: mixName,
+            amount: amount
+        }
+    });
+    goal.on('feedback', function (feedback) {
+        loadingAnimation(false);
+        var msg = feedback.task_state;
+        var msgStatus;
+        if (new RegExp(["Failed", "FAILED"].join("|")).test(msg)) {
+            msgStatus = 1;
+        } else if (new RegExp(["Picking up bottle succeeded", "Moving bottle to glass succeeded"].join("|")).test(msg)) {
+            msgStatus = 2;
+        } else if (new RegExp(["Finished", "succeeded"].join("|")).test(msg)) {
+            msgStatus = 0;
+        } else {
+            msgStatus = 2;
+        }
+        console.log(msg);
+        displayMsg(msg, false, msgStatus);
+        //If still process still ongoing show loading bar after a while
+        if (msgStatus >= 2) {
+            animationTimeout = setTimeout(function () {
+                loadingAnimation(true);
+            }, 2500);
+            playRandomNoRepeatSound(feedbackChooser);
+        } else {
+            var success = msgStatus === 0;
+            var chooser = (success) ? successChooser : failChooser;
+            playRandomNoRepeatSound(chooser);
+        }
+    });
+    goal.on('result', function (result) {
+        playAudio("#bar-music", 1);
+        $(buttonName).prop('disabled', false);
+        loadingAnimation(false);
+        listenToAvailableCocktails();
+        var msg = 'Final Result: ' + result.success;
+        console.log(msg);
+    });
+    goal.send();
 }
 
 function emptyIngredientsDisplay() {
@@ -178,8 +196,8 @@ function addCocktails(cocktailsArray, availabilityArray, recognizedBottles, need
         //Check if Array valid, not empty and an available cocktail exists
         if (cocktailsArray && cocktailsArray.length !== 0 && availabilityArray.indexOf(true) > -1) {
             //If msg "No cocktails..." is displayed, remove that msg
-            if ($(".btn-group").text().indexOf("No cocktails available") !== -1) {
-                $(".btn-group").empty();
+            if ($(".cocktail-list").text().indexOf("No cocktails available") !== -1) {
+                $(".cocktail-list").empty();
                 emptyIngredientsDisplay();
             }
             $("#mixButton").prop('disabled', false);
@@ -212,8 +230,8 @@ function addCocktails(cocktailsArray, availabilityArray, recognizedBottles, need
                         .text("Ingredients: " + " (" + tooltipElement.children("." + availableIngredientColorClass).length + "/" + (nameAndBottlesArr.length - 2) + ")")
                         .append($("<br/>"));
                 tooltipElement.prepend(listEntry);
-                //Append Radiobutton for each Cocktail, disable unavailable cocktail-radios
-                var alreadyListed = $('.btn-group').find('[value="' + cocktailName + '"]');
+                //Append Radiobutton for each cocktail, disable unavailable cocktail-radios
+                var alreadyListed = $('.cocktail-list').find('[value="' + cocktailName + '"]');
                 var tooltipHtml = tooltipElement.outerHTML();
                 //If cocktail not listed yet add it
                 if (alreadyListed.length === 0) {
@@ -225,7 +243,7 @@ function addCocktails(cocktailsArray, availabilityArray, recognizedBottles, need
                     });
                     var cocktailLabel = cocktailName.replace(/\w\S*/g, capitalize);
                     //Create label + append Tooltip
-                    var $label = $('<label data-toggle="tooltip" data-html="true" data-placement="bottom" data-container=".btn-group"></label>')
+                    var $label = $('<label data-toggle="tooltip" data-html="true" data-placement="bottom" data-container=".cocktail-list"></label>')
                             .addClass("btn btn-default")
                             .attr(tooltipProperty, tooltipHtml)
                             .text(cocktailLabel);
@@ -239,7 +257,7 @@ function addCocktails(cocktailsArray, availabilityArray, recognizedBottles, need
                     }, function () {
                         emptyIngredientsDisplay();
                     });
-                    $(".btn-group").append($label);
+                    $(".cocktail-list").append($label);
                 }
                 //If already there
                 else {
@@ -264,11 +282,11 @@ function addCocktails(cocktailsArray, availabilityArray, recognizedBottles, need
             //$('[data-toggle="tooltip"]').tooltip(); //activate Tooltips
 
             //Sort alphabetically first and then by availability
-            sortByContent('.btn-group', 'label', 'asc');
-            sortByClass('.btn-group', 'label', 'desc', 'darkgreen');
+            sortByContent('.cocktail-list', 'label', 'asc');
+            sortByClass('.cocktail-list', 'label', 'desc', 'darkgreen');
         } else {
             var msg = "No cocktails available at the moment, try putting a few more bottles on the table! ;)";
-            displayMsg(msg, '.btn-group');
+            displayMsg(msg, '.cocktail-list');
             emptyIngredientsDisplay();
             $("#mixButton").prop('disabled', true);
         }
@@ -278,10 +296,27 @@ function addCocktails(cocktailsArray, availabilityArray, recognizedBottles, need
 }
 
 function addRecognizedBottles(recognizedBottles) {
-    $("#bottleList").empty();
     $("#howManyBottlesFound").text(recognizedBottles.length);
     for (var x in recognizedBottles) {
         $("#bottleList").append("<li>" + recognizedBottles[x].replace(/\w\S*/g, capitalize) + "</li>");
+        var bottleName = recognizedBottles[x];
+        var alreadyListed = $('.bottle-list').find('[value="' + bottleName + '"]');
+        //If cocktail not listed yet add it
+        if (alreadyListed.length === 0) {
+            //Create label + append Tooltip
+            var cocktailLabel = bottleName.replace(/\w\S*/g, capitalize);
+            var $label = $('<label data-toggle="tooltip" data-html="true" data-placement="bottom" data-container=".bottle-list"></label>')
+                    .addClass("btn btn-default")
+                    .text(cocktailLabel);
+            var $radio = $('<input>').attr({
+                type: 'radio',
+                id: 'bottles',
+                name: 'bottle',
+                value: bottleName
+            });
+            $label.append($radio);
+            $(".bottle-list").append($label);
+        }
     }
 }
 

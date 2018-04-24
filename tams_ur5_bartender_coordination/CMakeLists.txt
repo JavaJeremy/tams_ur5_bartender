@@ -27,6 +27,8 @@ catkin_package(
 	CATKIN_DEPENDS actionlib_msgs
 )
 
+add_compile_options(-std=c++11)
+
 include_directories(
 	${catkin_INCLUDE_DIRS}
 )

@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
 	actionlib
 	roscpp
 	rospy
+        rosbag
 	std_msgs
 	moveit_ros_planning_interface
 	moveit_visual_tools

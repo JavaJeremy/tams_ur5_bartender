@@ -44,73 +44,129 @@
             <div class="container">
                 <div class="row">
                     <div class="col-lg-12 flex">
-                        <h1 class="robo">Welcome to the <span class="shade">Robot</span> Bar!</h1>
-                    </div> 
-                </div>
-                <div class="row">
-                    <div class="col-lg-6 pull-left">
-                        <p>Choose your drink!</p>
-                    </div>
-                    <div class="col-lg-2 pull-right">
-                        <div class="dropdown">
-                            <button class="btn dropdown-toggle" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                Bottles <span id="howManyBottlesFound" class="badge"></span>
-                            </button>
-                            <ul id="bottleList" class="dropdown-menu pull-right"></ul>
-                        </div>
+                        <h1 style="margin-top:0;" class="robo">Welcome to the <span class="shade">Robot</span> Bar!</h1>
                     </div> 
                 </div>
 
-                <hr>
                 <div class="row">
-                    <div class="col-lg-10">
-                        <div class="btn-group" data-toggle="buttons"></div>
-                    </div>
-                    <div class="col-lg-2">
-                        <div class="msg-container">
-                            <div id="bottlesOfCocktail">Ingredients...</div>
-                        </div>
-                    </div>
-                </div>
-                <hr>
+                    <div>
 
-                <div class="row">
-                    <div class="col-lg-12">
-                        <button class="btn btn-block btn-primary btn-lg" id="mixButton">
-                            <span class="glyphicon glyphicon-glass"></span>
-                            <b class="robo">Mix it!</b>
-                        </button>
+                        <ul class="nav nav-tabs">
+                            <li class="active">
+                                <a data-toggle="tab" href="#cocktails">Cocktails</a>
+                            </li>
+                            <li>
+                                <a data-toggle="tab" href="#bottles">Bottles <span id="howManyBottlesFound" class="badge"></span></a>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content">
+
+                            <div id="cocktails" class="tab-pane fade in active">
+                                <div class="row">
+                                    <div class="col-lg-12">
+                                        <p>Choose your drink!</p>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <!--COCKTAILS-->
+                                    <div class="col-lg-10">
+                                        <div class="cocktail-list btn-group" data-toggle="buttons"></div>
+                                    </div>
+                                    <!--Ingredients (Bottles)-->
+                                    <div class="col-lg-2" style="margin:0.25em 0;">
+                                        <div class="msg-container">
+                                            <div id="bottlesOfCocktail">Ingredients...</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <hr>
+                                <div class="row">
+                                    <div class="col-lg-12">
+                                        <button class="btn btn-block btn-primary btn-lg" id="mixButton">
+                                            <span class="glyphicon glyphicon-glass"></span>
+                                            <b class="robo">Mix it!</b>
+                                        </button>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            <div id="bottles" class="tab-pane fade">
+                                <div class="row">
+                                    <div class="col-lg-12">
+                                        <p>Grab a bottle!</p>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <!--BOTTLES-->
+                                    <div class="col-lg-10">
+                                        <div class="bottle-list btn-group" data-toggle="buttons"></div>
+                                    </div>
+
+                                    <div class="col-lg-2" style="margin:0.25em 0;">
+                                        <div class="msg-container">
+                                            <div id="bottleStats">Stats...</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <hr>
+
+                                <form>
+                                    <div class="form-group row">
+                                        <div class="col-xs-2">
+                                            <div class="input-group">
+                                                <input type="text" class="form-control input-lg" id="pourAmount" placeholder="Amount" aria-describedby="basic-addon2">
+                                                <span class="input-group-addon" id="basic-addon2">ml</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-xs-10">
+                                            <span class="input-group-btn">
+                                                <button class="btn btn-block btn-primary btn-lg" id="pourButton">
+                                                    <span class="glyphicon glyphicon-celebration"></span>
+                                                    <b class="robo">Grab it!</b>
+                                                </button>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </form>
+
+                            </div>
+
+                        </div>
+
                     </div>
-                </div>
-                <div class="row">
-                    <div class="col-lg-12">
-                        <div class="msg-container">
-                            <div class="msg-wrap">
-                                <span class="msg"></span>
+
+                    <div class="row">
+                        <div class="col-lg-12">
+                            <div class="msg-container">
+                                <div class="msg-wrap">
+                                    <span class="msg"></span>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="waiting"></div>
+            <div class="waiting"></div>
 
-        <audio id="robot-music"> 
-            <source src="audio/robot_music.mp3" type="audio/mpeg">
-        </audio> 
-        <audio id="bar-music" loop> 
-            <source src="audio/ocean_sound.mp3" type="audio/mpeg">
-        </audio> 
+            <audio id="robot-music"> 
+                <source src="audio/robot_music.mp3" type="audio/mpeg">
+            </audio> 
+            <audio id="bar-music" loop> 
+                <source src="audio/ocean_sound.mp3" type="audio/mpeg">
+            </audio> 
 
-        <script>window.jQuery || document.write('<script src="js/vendor/jquery-1.11.3.js"><\/script>');</script>
+            <script>window.jQuery || document.write('<script src="js/vendor/jquery-1.11.3.js"><\/script>');</script>
 
-        <script src="js/vendor/bootstrap.min.js"></script>
+            <script src="js/vendor/bootstrap.min.js"></script>
 
-        <!--Comment in roslib.min.js for real-demo, and roslib_simulator.js for simulation-->
-        <script src="js/roslibjs-develop/build/roslib.min.js"></script>-->
-        <!--<script src="js/roslib_simulator.js"></script>-->
-        <script src="js/main.js"></script>
+            <!--Comment in roslib.min.js for real-demo, and roslib_simulator.js for simulation-->
+            <script src="js/roslibjs-develop/build/roslib.min.js"></script>
+            <!--<script src="js/roslib_simulator.js"></script>-->
+            <script src="js/main.js"></script>
 
     </body>
 </html>

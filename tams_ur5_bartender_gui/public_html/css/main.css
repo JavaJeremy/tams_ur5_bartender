@@ -6,7 +6,7 @@
     src: url(../fonts/Nano/NANO-LOW.TTF);
 }
 
-#bottlesOfCocktail {
+.msg-container {
     padding: 1em;
 }
 
@@ -31,12 +31,15 @@
 }
 
 .btn-group{
+    display: flex;
+    flex-wrap: wrap;
     position: static;
     max-height: 300px;
     overflow: auto;
 }
 
 .btn-group label {
+    flex-grow: 1;
     font-size: 18pt;
 }
 
@@ -48,7 +51,7 @@
     text-decoration: none;
 }
 
-#mixButton {
+#mixButton #pourButton {
     margin-bottom: 0.5em;
     font-size: 1.5em;
     letter-spacing: 0.2em; 
