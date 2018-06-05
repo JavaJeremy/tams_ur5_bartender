@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- Startup UR5 W/O Kinect but with demo publisher -->
+    <include file="$(find tams_ur5_setup_moveit_config)/launch/demo.launch">
+        <arg name="ur5_joint_ranges_config" value="$(find tams_ur5_description)/config/joint_ranges/elbow_up.yaml"/>
+    </include>
+    <param name="move_group/constraint_approximations_path" value="$(find tams_ur5_bartender_manipulation)/cadb"/>
+
+</launch>
