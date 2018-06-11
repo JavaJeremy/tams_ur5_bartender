@@ -1,7 +1,6 @@
 <?xml version="1.0"?>
 <launch>
 
-
     <include file="$(find tams_ur5_bartender_image_processing)/launch/publishDemoBottles.launch"/>
 
     <!-- Startup manipulation -->

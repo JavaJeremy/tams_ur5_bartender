@@ -387,22 +387,26 @@ class GrabPourPlace  {
 
 		//set target and constraints
 		arm.setPoseReferenceFrame("table_top");
+		ROS_INFO_STREAM("Set reference fram to table_top");
 		//using fixed pouring position to guarantee successfull pouring
 		//arm.setNamedTarget("pour_above_glass_1");
 		arm.setPoseTarget(pose);
+		ROS_INFO_STREAM("Set pose target");
 
 		//start planning
 		moveit::planning_interface::MoveGroupInterface::Plan best_plan;
 		bool succeeded = false;
-		for(int i = 0; i < 10; i++) {
+		for(int i = 0; i < 10 && !succeeded; i++) {
 			moveit::planning_interface::MoveGroupInterface::Plan plan;
 			arm.plan(plan);
 			if(!plan.trajectory_.joint_trajectory.points.empty() && can_pour(plan.trajectory_.joint_trajectory, pose, bottles_[bottle_id])) {
 				if(!succeeded) {
+					ROS_INFO_STREAM("Plan " << i << " suceeded!");
 					best_plan = plan;
 					succeeded = true;
 				} else if(plan.trajectory_.joint_trajectory.points.size() < best_plan.trajectory_.joint_trajectory.points.size()){
 					best_plan = plan;
+					ROS_INFO_STREAM("Plan " << i << "did not suceed!");
 				}
 			}
 		}
@@ -775,6 +779,10 @@ class GrabPourPlace  {
 
 		moveit::planning_interface::MoveGroupInterface::Plan move_bottle_back;
 		moveit::planning_interface::MoveGroupInterface::Plan move_bottle;
+
+		//Slow down for everything except pouring!
+		arm.setMaxAccelerationScalingFactor(0.3);
+
 		
 		do {
 			switch(state) {
