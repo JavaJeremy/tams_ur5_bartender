@@ -18,6 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
 	moveit_core
 	tams_ur5_bartender_msgs
 	tf
+        tams_pour
 )
 
 add_action_files(DIRECTORY action FILES PourBottle.action)
