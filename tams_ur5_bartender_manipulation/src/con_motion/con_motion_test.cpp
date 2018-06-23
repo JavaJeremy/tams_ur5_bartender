@@ -35,8 +35,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <moveit_msgs/ApplyPlanningScene.h>
 #include <moveit_msgs/Grasp.h>
 #include <moveit_msgs/DisplayTrajectory.h>
-
-#include <manipulation_msgs/GraspPlanning.h>
+#include <moveit_msgs/GraspPlanning.h>
  
 #include <cmath>
 #include <ros/ros.h>

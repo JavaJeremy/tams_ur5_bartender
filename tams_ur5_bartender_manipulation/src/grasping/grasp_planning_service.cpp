@@ -24,7 +24,6 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.*/
 #include <ros/ros.h>
 #include <moveit_msgs/GraspPlanning.h>
-
 #include <moveit/move_group_interface/move_group_interface.h>
 
 void jointValuesToJointTrajectory(std::map<std::string, double> target_values, ros::Duration duration, 
