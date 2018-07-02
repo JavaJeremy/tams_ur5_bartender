@@ -36,6 +36,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <ros/ros.h>
 #include <tf/transform_listener.h>
 #include <tf2/exceptions.h>
+#include <geometry_msgs/WrenchStamped.h>
 #include <actionlib/server/simple_action_server.h>
 
 #include <moveit/move_group_interface/move_group_interface.h>
@@ -50,12 +51,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <moveit_msgs/ApplyPlanningScene.h>
 
 #include <tams_ur5_bartender_msgs/BarCollisionObjectArray.h>
+#include <tams_pour/PourHumanly.h>
 
 
 const std::string ARM_ID = "arm";
 const std::string GRIPPER_ID = "gripper";
 bool USE_BOTTLE_PUBLISHER = true;
 bool OBJECTS_RECOGNIZED = true;
+double currentWeight,noBottleWeight,initialAmount;
 const tams_ur5_bartender_msgs::BarCollisionObjectArray* collision_objects_ = NULL;
 
 
@@ -77,14 +80,16 @@ class GrabPourPlace  {
 	ros::NodeHandle node_handle;
 	ros::ServiceClient planning_scene_diff_client;
 	ros::ServiceClient grasp_planning_service;
+	ros::ServiceClient human_pour_client_;
 	ros::Subscriber collision_obj_sub;
+	ros::Subscriber weight_sub;
 	actionlib::SimpleActionServer<tams_ur5_bartender_manipulation::PourBottleAction>* as_;
 	moveit::planning_interface::PlanningSceneInterface planning_scene_interface_;
 
 	std::map<std::string, moveit_msgs::CollisionObject> bottles_;
 	moveit_msgs::CollisionObject glass_;
         
-        std::stringstream sstm;
+    std::stringstream sstm;
 
 	public:
 	std::map<std::string, ObjectDescription> object_map;
@@ -92,7 +97,7 @@ class GrabPourPlace  {
 	GrabPourPlace() : arm(ARM_ID), gripper(GRIPPER_ID)
 	{
 		//Create dummy objects
-		ObjectDescription glass = {{0, 0.04, 0.12}, {-0.20, 0.35, 0.0}};
+		ObjectDescription glass = {{0, 0.04, 0.12}, {-0.10, 0.35, 0.0}};
 		object_map["glass"] = glass;
 
 		ObjectDescription bottle = {{0, 0.04, 0.3}, {-0.1, -0.1, 0}};
@@ -108,10 +113,13 @@ class GrabPourPlace  {
 
 		//subscribe collision objects
 		collision_obj_sub = node_handle.subscribe("recognizedObjects", 1000, &GrabPourPlace::onObjectsRecognized, this);
+		weight_sub = node_handle.subscribe("calibrated_wrench/external", 100, &GrabPourPlace::ftSensorCallback, this);
 
 		//configure planner
 		arm.setPlannerId("RRTConnectkConfigDefault");
 		arm.setPlanningTime(planningTime);
+
+		human_pour_client_ = node_handle.serviceClient<tams_pour::PourHumanly>("/pourHumanly");
 	}
 
 	void despawnObject(std::string object_id){
@@ -218,145 +226,6 @@ class GrabPourPlace  {
 		constraints.orientation_constraints.push_back(ocm);
 		arm.setPathConstraints(constraints);
 	}
-
-/*  obsolete orientation constraint planning
- 
-	moveit::planning_interface::MoveGroup::Plan get_move_bottle_plan_cartesian(std::string bottle_id, geometry_msgs::Pose pose, float zOffset) {
-
-		//bottle up constraint
-		set_orientation_constraint();
-
-		arm.setPoseReferenceFrame("table_top");
-		geometry_msgs::PoseStamped way_pose_stamped;
-		try{
-			listener->transformPose("table_top", ros::Time(0), arm.getCurrentPose(), "world", way_pose_stamped);
-		} catch(tf2::TransformException ex) {
-			ROS_ERROR("%s",ex.what()); 
-		}
-		std::vector<geometry_msgs::Pose> waypoints;
-		way_pose_stamped.pose.position.x -= 0.2;
-		way_pose_stamped.pose.position.z += zOffset / 2;
-		waypoints.push_back(way_pose_stamped.pose);
-		pose.position.z += zOffset;
-		waypoints.push_back(pose);
-
-		moveit_msgs::RobotTrajectory trajectory; //Trajectory
-		double success = arm.computeCartesianPath(waypoints, 0.03, 3, trajectory);
-		ROS_INFO("Move to glass trajectory (%.2f%% achieved)", success * 100.0);
-
-		arm.clearPathConstraints();
-		ros::Duration(2.0).sleep();
-
-		moveit::planning_interface::MoveGroup::Plan plan;
-		if(success == 1.0) {
-			plan.trajectory_ = trajectory;
-		}
-		return plan;
-	}
-
-	moveit::planning_interface::MoveGroup::Plan get_move_bottle_plan_fixed(std::string bottle_id, std::string target) {
-
-		//bottle up constraint
-		set_orientation_constraint();
-
-		//set target and constraints
-		arm.setPoseReferenceFrame("table_top");
-		arm.setNamedTarget(target);
-
-		//arm.setPlannerId("PRMstarkConfigDefault");
-		arm.setPlanningTime(planningTime);
-
-		//move arm
-		moveit::planning_interface::MoveGroup::Plan plan;
-		std::vector<std::string> ids;
-		ids.push_back(bottle_id);
-		std::map<std::string, moveit_msgs::AttachedCollisionObject> attached_objects = planning_scene_interface_.getAttachedObjects(ids);
-		moveit_msgs::AttachedCollisionObject attached_bottle = attached_objects[bottle_id];
-		float xPos = -1.0;
-		float yPos = -1.0;
-		if(bottles_.count(bottle_id) == 1) {
-			xPos = bottles_[bottle_id].primitive_poses[0].position.x;
-			yPos = bottles_[bottle_id].primitive_poses[0].position.y;
-		}	
-
-		moveit_msgs::CollisionObject bottle = attached_bottle.object;
-		moveit_msgs::CollisionObject stub_bottle = spawnObject("bottle", xPos, yPos, .05);
-
-		gripper.detachObject(bottle_id);
-		despawnObject(bottle_id);
-		attached_bottle.object = stub_bottle;
-		planning_scene_interface_.applyAttachedCollisionObject(attached_bottle);
-
-		ros::Duration(5.0).sleep();
-		arm.plan(plan);
-
-		gripper.detachObject("bottle");
-		despawnObject("bottle");
-		attached_bottle.object = bottle;
-		planning_scene_interface_.applyAttachedCollisionObject(attached_bottle);
-
-		for(int i = 0; i<attached_bottle.touch_links.size(); i++) {
-			ROS_INFO_STREAM("Touch link" << attached_bottle.touch_links[i]);
-		}
-		arm.clearPathConstraints();
-		ros::Duration(2.0).sleep();
-		return plan;
-	}
-
-	moveit::planning_interface::MoveGroup::Plan get_move_bottle_plan(std::string bottle_id, geometry_msgs::Pose pose, float zOffset) {
-
-		//bottle up constraint
-		set_orientation_constraint();
-
-		//Z offset for pose
-		pose.position.z += zOffset;
-
-		ROS_INFO_STREAM("Moving Bottle to pose: " << pose);
-
-		//set target and constraints
-		arm.setPoseReferenceFrame("table_top");
-		arm.setPoseTarget(pose);
-
-		//arm.setPlannerId("PRMstarkConfigDefault");
-		arm.setPlanningTime(planningTime);
-
-		//move arm
-		moveit::planning_interface::MoveGroup::Plan plan;
-		std::vector<std::string> ids;
-		ids.push_back(bottle_id);
-		std::map<std::string, moveit_msgs::AttachedCollisionObject> attached_objects = planning_scene_interface_.getAttachedObjects(ids);
-		moveit_msgs::AttachedCollisionObject attached_bottle = attached_objects[bottle_id];
-		float xPos = -1.0;
-		float yPos = -1.0;
-		if(bottles_.count(bottle_id) == 1) {
-			xPos = bottles_[bottle_id].primitive_poses[0].position.x;
-			yPos = bottles_[bottle_id].primitive_poses[0].position.y;
-		}	
-
-		moveit_msgs::CollisionObject bottle = attached_bottle.object;
-		moveit_msgs::CollisionObject stub_bottle = spawnObject("bottle", xPos, yPos, .05);
-
-		gripper.detachObject(bottle_id);
-		despawnObject(bottle_id);
-		attached_bottle.object = stub_bottle;
-		planning_scene_interface_.applyAttachedCollisionObject(attached_bottle);
-
-		ros::Duration(5.0).sleep();
-		arm.plan(plan);
-
-		gripper.detachObject("bottle");
-		despawnObject("bottle");
-		attached_bottle.object = bottle;
-		planning_scene_interface_.applyAttachedCollisionObject(attached_bottle);
-
-		for(int i = 0; i<attached_bottle.touch_links.size(); i++) {
-			ROS_INFO_STREAM("Touch link" << attached_bottle.touch_links[i]);
-		}
-		arm.clearPathConstraints();
-		ros::Duration(2.0).sleep();
-		return plan;
-	}
-*/
 
 	moveit::planning_interface::MoveGroupInterface::Plan get_move_bottle_plan(std::string bottle_id, geometry_msgs::Pose pose, float zOffset) {
 
@@ -747,10 +616,10 @@ class GrabPourPlace  {
 				bottle = bottles_[bottle_id];
 			}
 			else {
-                            publishCurrentFeedback((std::stringstream&) (sstm << "Bottle " << bottle.id << " does not exist!"));
-                            ROS_INFO_STREAM("Bottle " << bottle.id << " does not exist!");
-                            as_->setAborted();
-                            return;
+	            publishCurrentFeedback((std::stringstream&) (sstm << "Bottle " << bottle.id << " does not exist!"));
+	            ROS_INFO_STREAM("Bottle " << bottle.id << " does not exist!");
+	            as_->setAborted();
+	            return;
 			}
 		} else {
 			//Spawn bottle
@@ -771,8 +640,14 @@ class GrabPourPlace  {
 		}
 	}
 
+	void ftSensorCallback(const geometry_msgs::WrenchStamped& msg)
+	{
+	  currentWeight = msg.wrench.force.x * 101.0;// 1 Newton = ca. 101Gram + msg.wrench.force.y + msg.wrench.force.z;
+	}
+
 	bool pouringStateMachine(moveit_msgs::CollisionObject bottle, float portion_size) {
 		int CurrentAttempt = 1;
+		double relativeInitialAmount;
 		enum stateSpace { pickBottleUp, moveBottleToGlass, pourIntoGlass, moveBottleBack, placeBottleDown, moveArmToDefault, run_cleanup, Exit, OK };
 		stateSpace state = pickBottleUp;
 		stateSpace failedAtState = OK;
@@ -781,34 +656,53 @@ class GrabPourPlace  {
 		moveit::planning_interface::MoveGroupInterface::Plan move_bottle;
 
 		//Slow down for everything except pouring!
-		arm.setMaxAccelerationScalingFactor(0.3);
-
+		//arm.setMaxAccelerationScalingFactor(0.3);
+		tams_pour::PourHumanly srv;
 		
 		do {
 			switch(state) {
 
 				case pickBottleUp:
 					ROS_INFO_STREAM("--- STATE 1: pickBottleUp; Attempt " << CurrentAttempt);
-                                        publishCurrentFeedback((std::stringstream&) (sstm << "Picking up bottle: Attempt " << CurrentAttempt));
+                    publishCurrentFeedback((std::stringstream&) (sstm << "Picking up bottle: Attempt " << CurrentAttempt));
+					
+					while(!currentWeight || !noBottleWeight){
+	                    noBottleWeight = currentWeight;
+	                }
+
 					// if SUCCESS, move on to next state, else check number of attempts and either retry state or abort and skip states
 					if ( grab_bottle(bottle.id) ) {
 						ROS_INFO_STREAM("pickBottleUp succeeded with attempt " << CurrentAttempt);
-                                                publishCurrentFeedback((std::stringstream&) (sstm << "Picking up bottle succeeded with attempt " << CurrentAttempt));
+                        publishCurrentFeedback((std::stringstream&) (sstm << "Picking up bottle succeeded with attempt " << CurrentAttempt));
 						ros::Duration(0.5).sleep();
 						state = moveBottleToGlass;
 						CurrentAttempt = 1;
 					} else {
 						if ( CurrentAttempt++ == NUM_RETRIES_AFTER_JAM+1 ) {
 							ROS_INFO_STREAM("XXX STATE 1: pickBottleUp FAILED after all " << CurrentAttempt << " attempts. Moving on to cleanup.");
-                                                        publishCurrentFeedback((std::stringstream&) (sstm << "Picking up bottle FAILED after " << CurrentAttempt << ". attempt."));
+                            publishCurrentFeedback((std::stringstream&) (sstm << "Picking up bottle FAILED after " << CurrentAttempt << ". attempt."));
 							state = run_cleanup;
 							failedAtState = pickBottleUp;
 						}
 					}
 					break;
 
-
 				case moveBottleToGlass:
+                    srv.request.pouredAmount = portion_size;
+                    initialAmount = currentWeight;
+                    relativeInitialAmount = std::abs(initialAmount - noBottleWeight);
+                    relativeInitialAmount = relativeInitialAmount - 126.0 < 0 ? 0.0 : relativeInitialAmount - 126.0;
+                    srv.request.initialAmount = relativeInitialAmount;
+                    ROS_ERROR_STREAM("Initial Amount (-126gramm/total): " << relativeInitialAmount << "/" << std::abs(initialAmount - noBottleWeight) << ", total weight: " << initialAmount << ", noBottleWeight: " << noBottleWeight);
+                    srv.request.glassPose = get_glass_pose();
+                    srv.request.glassPose.position.z = 0.0;
+                    if (human_pour_client_.call(srv)) {
+                        ROS_INFO_STREAM("Called pour humanly service");
+                        state = placeBottleDown;
+                    } else {
+                        ROS_ERROR("Failed to call service pour humanly!");
+					}
+					/*
 					ROS_INFO_STREAM("--- STATE 2: moveBottleToGlass; (planningTime: " << planningTime << ") ; Attempt " << CurrentAttempt);
 					move_bottle = get_move_bottle_plan(bottle.id, get_glass_pose(), .3);
 					if(!move_bottle.trajectory_.joint_trajectory.points.empty()) {
@@ -821,8 +715,8 @@ class GrabPourPlace  {
 							CurrentAttempt = 1;
 							break;
 						} else {
-                                                    ROS_INFO_STREAM("moveBottleToGlass (executing path!) FAILED (in attempt " << CurrentAttempt << ")");
-                                                }
+                            ROS_INFO_STREAM("moveBottleToGlass (executing path!) FAILED (in attempt " << CurrentAttempt << ")");
+                        }
 					}
 					// when plan was found & executed, this isn't reached, else check number of attempts and either retry state or abort and skip states
 					if (CurrentAttempt++ == NUM_RETRIES_AFTER_JAM) {
@@ -832,8 +726,9 @@ class GrabPourPlace  {
 						failedAtState = moveBottleToGlass;
 						CurrentAttempt = 1;
 					}
+					*/
 					break;
-
+				/*
 				case pourIntoGlass:
 					state = moveBottleBack;
 					if ( !pour_bottle_in_glass(bottle, portion_size)){
@@ -844,7 +739,7 @@ class GrabPourPlace  {
                                         }
 					ros::Duration(0.5).sleep();
 					break;
-	 
+	 			*/
 
 				case moveBottleBack:
 					ROS_INFO_STREAM("--- STATE 4: moveBottleBack; Attempt " << CurrentAttempt);

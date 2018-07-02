@@ -2,5 +2,6 @@
     <!--Starting tams_ur5_bartender_maniplation-->
     <node pkg="tams_ur5_bartender_manipulation" type="grasp_planning_service" name="plan_grasps_service" />
     <node pkg="tams_ur5_bartender_manipulation" type="pour_bottle_action_server" name="pour_bottle_action_server" output="screen"/>
-    
+<node name="smoothNode" pkg="tams_pour" type="SmoothService.py" output="screen" />
+    <node name="trajectoryActionServer" pkg="tams_pour" type="trajectoryActionServer" output="screen"/>    
 </launch>

@@ -20,5 +20,9 @@
     <include file="$(find tams_ur5_bartender_gui)/launch/rosbridge.launch"/>
     
     <!-- Startup Rviz -->
-    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find tams_ur5_bartender_coordination)/rviz/startup.rviz" />
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find tams_ur5_bartender_coordination)/rviz/startup_pour.rviz" />
+
+    <!-- Startup FT-Sensor -->
+    <include file="$(find tams_ft_calibration)/launch/calibration_publisher.launch"/>
+    
 </launch>
